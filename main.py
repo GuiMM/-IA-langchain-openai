@@ -1,35 +1,68 @@
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
+from pydantic import Field, BaseModel
 from dotenv import load_dotenv
+from langchain_core.globals import set_debug
 import os
+
+set_debug(True)
 
 load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
 
-numero_dias = 7
-numero_criancas = 2
-atividades = "praia"
+class Destino(BaseModel):
+    cidade: str = Field("A cidade recomendada para visitar.")
+    motivo: str = Field("motivo pelo qual é interessante visitar essa cidade.")
 
-modelo_de_prompt = PromptTemplate(
+class Restaurantes(BaseModel):
+    cidade: str = Field("A cidade recomendada para visitar.")
+    motivo: str = Field("motivo pelo qual é interessante visitar essa cidade.")
+
+
+parseador_destino = JsonOutputParser(pydantic_object=Destino)
+parseador_restaurantes= JsonOutputParser(pydantic_object=Restaurantes)
+
+prompt_cidade = PromptTemplate(
     template="""
-    Crie um roteiro de viagem de {dias} dias,
-    para uma família com {criancas} criancas,
-    que gostam de {atividades}.
+    Sugira uma cidade dadoo meu interesse por {interesse}.
+    {formato_de_saida}
+    """,
+    input_variables=["interesse"],
+    partial_variables={"formato_de_saida":parseador_destino.get_format_instructions()}, 
+)
+
+prompt_restaurantes = PromptTemplate(
+    template="""
+    Sugira restaurantes populares entre locais em {cidade}.
+    {formato_de_saida}
+    """,
+    partial_variables={"formato_de_saida":parseador_restaurantes.get_format_instructions()}, 
+)
+
+prompt_cultural = PromptTemplate(
+    template="""
+    Sugira atividades e locais culturais em {cidade}.
     """
 )
 
-prompt = modelo_de_prompt.format(
-    dias=numero_dias, 
-    criancas=numero_criancas, 
-    atividades=atividades
-)
 
 modelo = ChatOpenAI(model="gpt-3.5-turbo",
                     temperature=0.5,  
                     api_key=api_key)
 
-resposta = modelo.invoke(prompt)
+cadeia1 = prompt_cidade | modelo | parseador_destino
+cadeia2 = prompt_restaurantes | modelo | parseador_restaurantes
+cadeia3 = prompt_cultural | modelo | StrOutputParser()
 
-print(resposta.content)
+cadeia = (cadeia1 | cadeia2 | cadeia3)
+
+resposta = cadeia.invoke(
+    {
+        "interesse": "praias"
+    }
+)
+
+print(resposta)
