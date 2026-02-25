@@ -9,7 +9,7 @@ from langgraph.graph import StateGraph, START, END
 from langchain_core.runnables import RunnableConfig
 from typing import Literal, TypedDict
 
-set_debug(False)
+set_debug(True)
 
 load_dotenv()
 
